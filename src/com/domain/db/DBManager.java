@@ -179,10 +179,11 @@ public class DBManager
 		Connection connection = null, mysql_conn = null;
 		try {
 			DBManager dbManager = new DBManager("jdbc:oracle:thin:@host:port:dbname", "user", "passwd", 1);
-			connection = dbManager.getConnection();
+			oracle_connection = dbManager.getConnection();
 
-			DBManager mysqldbManager = new DBManager("jdbc:postgresql://localhost:5432/postgres", "user", "passwd", 4);
-			mysql_conn = mysqldbManager.getConnection();
+			// DBManager dbManager = new DBManager("jdbc:postgresql://host:port/dbname", "user", "passwd", 4);
+			// DBManager dbManager = new DBManager("jdbc:mysql://host:port/dbname?useUnicode=true&characterEncoding=utf-8", "user", "passwd", 2);
+			// DBManager dbManager = new DBManager("jdbc:jtds:sqlserver://host:port/DatabaseName=dbname", "user", "passwd", 3);
 
 			// dbManager.initTableInfo(connection);
 			// dbManager.printTableInfos();
