@@ -6,8 +6,28 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.xs.spider.parser.*;
 
-
 public class demo {
+	
+    public static int convertPDF2SWF(String sourcePath, String destPath) throws IOException {
+        // 源文件不存在则返回
+        File source = new File(sourcePath);
+        if (!source.exists())
+            return 0;
+
+        // 调用pdf2swf命令进行转换
+        String command = "D:\\SWFTools\\pdf2swf.exe" + " " + sourcePath + " -o " + destPath + " -f -T 9";
+        System.out.println(command);
+        Process pro = Runtime.getRuntime().exec(command);
+
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(pro.getInputStream()));
+        while (bufferedReader.readLine() != null) ;
+        try {
+            pro.waitFor();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        return pro.exitValue();
+    }
 	
 	public static void main(String[] args)
 	{
