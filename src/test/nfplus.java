@@ -1,16 +1,14 @@
 import org.w3c.dom.*;
 import org.xml.sax.SAXException;
 
-import javax.imageio.ImageIO;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.*;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import java.awt.image.BufferedImage;
 import java.io.*;
-import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.text.SimpleDateFormat;
@@ -20,11 +18,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class nfplus {
-    private String IMAGE_PATH = "F:\\xx\\";
-    private String XML_PATH = "F:\\xx\\yy\\";
+    //private String IMAGE_PATH = "Z:\\nfplus\\";
+    //private String XML_PATH = "D:\\xml\\nfplus\\";
+    private String IMAGE_PATH = "F:\\myjob\\xx\\";
+    private String XML_PATH = "F:\\myjob\\xx\\yy\\";
+
     private String folderName = "";
     private String docIds = "";
-    private HashMap<String, String> chnlMap = new HashMap<>();
+    private HashMap<String, String> chnlMap = new HashMap<String, String>();
     private String channels = "2343,383485\n" +
             "4353,383484\n" +
             "1872,383483\n" +
@@ -213,9 +214,15 @@ public class nfplus {
                     }
                     String article_path = this.XML_PATH + "\\article-" + hashMap.get("DocId") + ".xml";
                     File article_file = new File(article_path);
-                    if ( !article_file.exists() && this.docIds.indexOf(hashMap.get("DocId") + "\n") == -1 ) {
+                    if ( !article_file.exists() && this.docIds.indexOf(hashMap.get("DocId") + "," + hashMap.get("lastModified") + "\n") == -1 ) {
+                        if ( this.docIds.indexOf(hashMap.get("DocId") + ",") != -1 ) {
+                            hashMap.put("columnId", "0000");
+                            hashMap.put("Title", "[已修改] " + hashMap.get("Title"));
+                        }
                         this.createRss(article_path, hashMap);
-                        this.writeFile(hashMap.get("DocId"));
+                        this.writeFile(hashMap.get("DocId") + "," + hashMap.get("lastModified"));
+                    } else {
+                        System.out.println("id为" + hashMap.get("DocId") + "的文档已入库");
                     }
                 }
             }
@@ -244,6 +251,7 @@ public class nfplus {
 
         String contentHtml = hashMap.get("Content");
         contentHtml = this.localizePic(contentHtml);
+        contentHtml = this.replaceVideo(contentHtml);
         String titleStr = hashMap.get("Title");
 
         Element pack = document.createElement("Package");
@@ -370,7 +378,7 @@ public class nfplus {
         nodePath.appendChild(NodePath);
 
         Element url = document.createElement("Url");
-        CDATASection urll = document.createCDATASection(hashMap.get("Url"));
+        CDATASection urll = document.createCDATASection("");
         url.appendChild(urll);
 
         Element hasTitlePic = document.createElement("hasTitlePic");
@@ -384,7 +392,8 @@ public class nfplus {
         expirationTime.appendChild(ExpirationTime);
 
         Element isTop = document.createElement("IsTop");
-        isTop.setTextContent("0");
+        CDATASection IsTop = document.createCDATASection("");
+        isTop.appendChild(IsTop);
         Element editor = document.createElement("Editor");
         Element attachement = document.createElement("Attachement");
 
@@ -421,7 +430,7 @@ public class nfplus {
         document.appendChild(founderEnpML);
         TransformerFactory transFactory = TransformerFactory.newInstance();
         try {
-            System.out.println("6. 生成xml文件");
+            System.out.println("6. 生成xml文件, docid 为 " +  hashMap.get("DocId"));
             Transformer transformer = transFactory.newTransformer();
             transformer.setOutputProperty(OutputKeys.INDENT, "Yes");
             transformer.transform(new DOMSource(document), new StreamResult(filename));
@@ -475,18 +484,64 @@ public class nfplus {
      * @param htmlStr String
      * @return htmlStr String
      */
-    public String localizePic(String htmlStr)
+    private String localizePic(String htmlStr)
     {
         System.out.println("5. 图片本地化保存");
         Pattern pattern = Pattern.compile("<img[\\s\\S]*?src=\"(.*?)\"", Pattern.CASE_INSENSITIVE);
         Matcher matcher = pattern.matcher(htmlStr);
         while ( matcher.find() ) {
             String imageUrl = matcher.group(1);
-            String imageName = imageUrl.split("/")[imageUrl.split("/").length - 1];
-            String imageType = imageName.split("\\.")[imageName.split("\\.").length - 1];
-            String imageHex = this.getImgeHexString(imageUrl, imageType);
-            this.saveImage(imageHex, this.IMAGE_PATH + this.folderName +  "\\" + imageName, imageType);
-            htmlStr = htmlStr.replaceAll(imageUrl, "/data/attachement/nfplus/" + this.folderName + "/" + imageName);
+            if ( !"".equals(imageUrl) )
+            {
+                String imageName = imageUrl.split("/")[imageUrl.split("/").length - 1];
+                if ( imageName.indexOf(".") == -1 )
+                {
+                    String imageSuffix = ".jpg";
+                    if ( imageName.indexOf("wx_fmt=gif") != -1 )
+                    {
+                        imageSuffix = ".gif";
+                    } else if ( imageName.indexOf("wx_fmt=png") != -1 ) {
+                        imageSuffix = ".png";
+                    }
+                    imageName = "wx-" + Math.random() + imageSuffix;
+                }
+
+                String imagePath = this.IMAGE_PATH + this.folderName +  "\\" + imageName;
+                File image_file = new File(imagePath);
+                if ( !image_file.exists() ) {
+                    System.out.println("正在下载图片: " + imageUrl);
+                    this.downloadPicture(imageUrl.replaceAll("https://", "http://"), imagePath);
+                }
+                htmlStr = htmlStr.replaceAll(imageUrl, "/data/attachement/nfplus/" + this.folderName + "/" + imageName);
+            }
+        }
+        return htmlStr;
+    }
+
+    /**
+     * @description 视频替换
+     * @param htmlStr String
+     * @return htmlStr String
+     */
+    private String replaceVideo(String htmlStr)
+    {
+        Pattern pattern = Pattern.compile("<video[\\s\\S]*?src=\"(.*?)\"[^>]*?></video>", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(htmlStr);
+        while ( matcher.find() ) {
+            String video_tag = matcher.group(0);
+            String video_url = matcher.group(1);
+            String new_video_tag = "<div id=\"J_prismPlayer\" style=\"width: 100%;\" class=\"prism-player\">.</div> <script type=\"text/javascript\"> \n" +
+                    "<!-- \n" +
+                    "function ali_videoplay() {new window.prismplayer({id: \"J_prismPlayer\",autoplay: true,width: \"100%\",source: \""+ video_url +" \n" +
+                    "\n" +
+                    "\",cover: 'http://www.southcn.com/public/2016/img/videoPoster.jpg \n" +
+                    "\n" +
+                    "',waterMark:'http://www.southcn.com/public/2016/img/tv/nfvideologo.png|TR|0.15|0.5 \n" +
+                    "\n" +
+                    "'});};ali_videoplay(); \n" +
+                    "--> \n" +
+                    "</script>";
+            htmlStr = htmlStr.replaceAll(video_tag, new_video_tag);
         }
         return htmlStr;
     }
@@ -496,8 +551,10 @@ public class nfplus {
      * @param nfplusid
      * @return
      */
-    public String getChannelid(String nfplusid)
+    private String getChannelid(String nfplusid)
     {
+        if ( nfplusid == "0000" )
+            return "383892";
         String channelid = this.chnlMap.get(nfplusid);
         if ( channelid == null )
             return "378292";
@@ -505,112 +562,38 @@ public class nfplus {
     }
 
     /**
-     * @description      getImgeHexString
-     * @param URLName   网络图片地址
-     * @param type      图片类型
-     * @return  String  转换结果
-     * @throws
+     * @description      链接url下载图片
+     * @param imageUrl  网络图片地址
+     * @param  imagePath  图片地址
      */
-    public String getImgeHexString(String URLName, String type)
-    {
-        String res = null;
+    public void downloadPicture(String imageUrl, String imagePath) {
         try {
-            int HttpResult = 0;
-            URL url = new URL(URLName); // 创建URL
-            URLConnection urlconn = url.openConnection();
-            urlconn.connect();
-            HttpURLConnection httpconn = (HttpURLConnection) urlconn;
-            HttpResult = httpconn.getResponseCode();
-            if (HttpResult != HttpURLConnection.HTTP_OK)
-            {// 不等于HTTP_OK则连接不成功
-                System.out.print("fail");
-            } else {
-                BufferedInputStream bis = new BufferedInputStream(urlconn.getInputStream());
+            URL url = new URL(imageUrl);
+            DataInputStream dataInputStream = new DataInputStream(url.openStream());
 
-                BufferedImage bm = ImageIO.read(bis);
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                ImageIO.write(bm, type, bos);
-                bos.flush();
-                byte[] data = bos.toByteArray();
+            FileOutputStream fileOutputStream = new FileOutputStream(new File(imagePath));
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
 
-                res = byte2hex(data);
-                bos.close();
+            byte[] buffer = new byte[1024];
+            int length;
+
+            while ((length = dataInputStream.read(buffer)) > 0) {
+                output.write(buffer, 0, length);
             }
-        } catch (Exception e) {
+            fileOutputStream.write(output.toByteArray());
+            dataInputStream.close();
+            fileOutputStream.close();
+        } catch (MalformedURLException e) {
             e.printStackTrace();
-        }
-        return res;
-    }
-
-    /**
-     * @description
-     * @param data
-     * @param fileName
-     * @param type      图片类型
-     * @return  void
-     */
-    public void saveImage(String data, String fileName, String type)
-    {
-
-        BufferedImage image = new BufferedImage(300, 300,BufferedImage.TYPE_BYTE_BINARY);
-        ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream();
-        try {
-            ImageIO.write(image, type, byteOutputStream);
-            byte[] bytes = hex2byte(data);
-            System.out.println("path:" + fileName);
-            RandomAccessFile file = new RandomAccessFile(fileName, "rw");
-            file.write(bytes);
-            file.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    /**
-     * @description
-     * @param s String
-     * @return  byte
-     */
-    public byte[] hex2byte(String s)
-    {
-        byte[] src = s.toLowerCase().getBytes();
-        byte[] ret = new byte[src.length / 2];
-        for (int i = 0; i < src.length; i += 2)
-        {
-            byte hi = src[i];
-            byte low = src[i + 1];
-            hi = (byte) ((hi >= 'a' && hi <= 'f') ? 0x0a + (hi - 'a')
-                    : hi - '0');
-            low = (byte) ((low >= 'a' && low <= 'f') ? 0x0a + (low - 'a')
-                    : low - '0');
-            ret[i / 2] = (byte) (hi << 4 | low);
-        }
-        return ret;
-    }
-
-    /**
-     * @description 格式化byte
-     * @param b  byte[]
-     * @return  String
-     */
-    public String byte2hex(byte[] b)
-    {
-        char[] Digit = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
-        char[] out = new char[b.length * 2];
-
-        for ( int i = 0; i < b.length; i++ )
-        {
-            byte c = b[i];
-            out[i * 2] = Digit[(c >>> 4) & 0X0F];
-            out[i * 2 + 1] = Digit[c & 0X0F];
-        }
-        return new String(out);
-    }
-
     public static void main(String args[])
     {
         nfplus np = new nfplus();
-        InputStream inputStream = np.getNfplusRss("http://teststatic.nfapp.southcn.com/southcn/nfplus-article.xml");
+        InputStream inputStream = np.getNfplusRss("http://static.nfapp.southcn.com/southcn/nfplus-article.xml");
         np.parseRss(inputStream);
         System.out.println("7. 结束了");
     }

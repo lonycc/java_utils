@@ -13,17 +13,21 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLConnection;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class epaper {
-    private String IMAGE_PATH = "F:\\xx\\";
-    private String XML_PATH = "F:\\xx\\yy\\";
+    //private String IMAGE_PATH = "Z:\\epapercover\\";
+    //private String XML_PATH = "D:\\xml\\southcn\\";
+    private String IMAGE_PATH = "F:\\myjob\\xx\\";
+    private String XML_PATH = "F:\\myjob\\xx\\yy\\";
+
     private String folderName = null;
 
     public epaper()
@@ -168,17 +172,25 @@ public class epaper {
             String imageUrl = matcher.group(1);
             imageUrl = "http://epaper.southcn.com/nfdaily/" + imageUrl.substring(9);
             String imageName = imageUrl.split("/")[imageUrl.split("/").length - 1];
-            String imageType = imageName.split("\\.")[imageName.split("\\.").length - 1];
-            String imageHex = this.getImgeHexString(imageUrl, imageType);
-            this.saveImage(imageHex, this.IMAGE_PATH + imageName, imageType);
-            String nimageName = "small_" + imageName;
-            this.reduceImg(this.IMAGE_PATH + imageName, this.IMAGE_PATH + nimageName, 140, 230, null);
+            String imagePath = this.IMAGE_PATH + imageName;
+            File image_file = new File(imagePath);
+            if ( !image_file.exists() ) {
+                System.out.println("正在下载图片: " + imageUrl);
+                this.downloadPicture(imageUrl, imagePath);
+            }
 
+            String nimageName = "small_" + imageName;
+            String nimagePath = this.IMAGE_PATH + nimageName;
+            File nimage_file = new File(nimagePath);
+            if ( !nimage_file.exists() ) {
+                System.out.println("正在压缩图片: " + nimagePath);
+                this.reduceImg(imagePath, nimagePath, 140, 230, null);
+            }
 
             HashMap<String, String> hashMap = new HashMap<String, String>();
             hashMap.put("title", this.folderName + " 封面");
-            hashMap.put("content", "<img src=\"/data/attachment/epaper/" + nimageName + "\" />");
-            hashMap.put("channelid", "12345");
+            hashMap.put("content", "<img border=\"0\" align=\"center\" title=\"封面图\" src=\"/data/attachement/epapercover/" + nimageName + "\" />");
+            hashMap.put("channelid", "384367");
             hashMap.put("nsdate", this.folderName + " 08:00:00");
             hashMap.put("url", tempurl);
 
@@ -186,6 +198,8 @@ public class epaper {
             File article_file = new File(article_path);
             if ( !article_file.exists() ) {
                 this.createRss(article_path, hashMap);
+            } else {
+                System.out.println("今天的封面已经入库");
             }
         }
     }
@@ -343,7 +357,8 @@ public class epaper {
         expirationTime.appendChild(ExpirationTime);
 
         Element isTop = document.createElement("IsTop");
-        isTop.setTextContent("0");
+        CDATASection IsTop = document.createCDATASection("");
+        isTop.appendChild(IsTop);
         Element editor = document.createElement("Editor");
         Element attachement = document.createElement("Attachement");
 
@@ -391,109 +406,33 @@ public class epaper {
         }
     }
 
-
-
     /**
-     * @description      getImgeHexString
-     * @param URLName   网络图片地址
-     * @param type      图片类型
-     * @return  String  转换结果
-     * @throws
+     * @description      链接url下载图片
+     * @param imageUrl  网络图片地址
+     * @param  imagePath  图片地址
      */
-    public String getImgeHexString(String URLName, String type)
-    {
-        String res = null;
+    public void downloadPicture(String imageUrl, String imagePath) {
         try {
-            int HttpResult;
-            URL url = new URL(URLName); // 创建URL
-            URLConnection urlconn = url.openConnection();
-            urlconn.connect();
-            HttpURLConnection httpconn = (HttpURLConnection) urlconn;
-            HttpResult = httpconn.getResponseCode();
-            if (HttpResult != HttpURLConnection.HTTP_OK)
-            {// 不等于HTTP_OK则连接不成功
-                System.out.print("fail");
-            } else {
-                BufferedInputStream bis = new BufferedInputStream(urlconn.getInputStream());
+            URL url = new URL(imageUrl);
+            DataInputStream dataInputStream = new DataInputStream(url.openStream());
 
-                BufferedImage bm = ImageIO.read(bis);
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                ImageIO.write(bm, type, bos);
-                bos.flush();
-                byte[] data = bos.toByteArray();
+            FileOutputStream fileOutputStream = new FileOutputStream(new File(imagePath));
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
 
-                res = byte2hex(data);
-                bos.close();
+            byte[] buffer = new byte[1024];
+            int length;
+
+            while ((length = dataInputStream.read(buffer)) > 0) {
+                output.write(buffer, 0, length);
             }
-        } catch (Exception e) {
+            fileOutputStream.write(output.toByteArray());
+            dataInputStream.close();
+            fileOutputStream.close();
+        } catch (MalformedURLException e) {
             e.printStackTrace();
-        }
-        return res;
-    }
-
-    /**
-     * @description
-     * @param data
-     * @param fileName
-     * @param type      图片类型
-     * @return  void
-     */
-    public void saveImage(String data, String fileName, String type)
-    {
-
-        BufferedImage image = new BufferedImage(300, 300,BufferedImage.TYPE_BYTE_BINARY);
-        ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream();
-        try {
-            ImageIO.write(image, type, byteOutputStream);
-            byte[] bytes = hex2byte(data);
-            System.out.println("path:" + fileName);
-            RandomAccessFile file = new RandomAccessFile(fileName, "rw");
-            file.write(bytes);
-            file.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-
-    /**
-     * @description
-     * @param s String
-     * @return  byte
-     */
-    public byte[] hex2byte(String s)
-    {
-        byte[] src = s.toLowerCase().getBytes();
-        byte[] ret = new byte[src.length / 2];
-        for (int i = 0; i < src.length; i += 2)
-        {
-            byte hi = src[i];
-            byte low = src[i + 1];
-            hi = (byte) ((hi >= 'a' && hi <= 'f') ? 0x0a + (hi - 'a')
-                    : hi - '0');
-            low = (byte) ((low >= 'a' && low <= 'f') ? 0x0a + (low - 'a')
-                    : low - '0');
-            ret[i / 2] = (byte) (hi << 4 | low);
-        }
-        return ret;
-    }
-
-    /**
-     * @description 格式化byte
-     * @param b  byte[]
-     * @return  String
-     */
-    public String byte2hex(byte[] b)
-    {
-        char[] Digit = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
-        char[] out = new char[b.length * 2];
-
-        for ( int i = 0; i < b.length; i++ )
-        {
-            byte c = b[i];
-            out[i * 2] = Digit[(c >>> 4) & 0X0F];
-            out[i * 2 + 1] = Digit[c & 0X0F];
-        }
-        return new String(out);
     }
 
     public static void main(String args[]) throws IOException
@@ -501,7 +440,16 @@ public class epaper {
         epaper ep = new epaper();
         SimpleDateFormat df = new SimpleDateFormat("yyyy-MM/dd/");
         String today = df.format(new Date());
-        ep.getHTML("http://epaper.southcn.com/nfdaily/html/"+today+"node_2.htm", "UTF-8");
+
+        Calendar cal = Calendar.getInstance();
+        int dow = cal.get(Calendar.DAY_OF_WEEK);
+
+        String node = "node_581.htm";
+
+        if ( dow == 1 )
+            node = "node_2.htm";
+
+        ep.getHTML("http://epaper.southcn.com/nfdaily/html/" + today + node, "UTF-8");
         System.out.println("3. 结束了");
     }
 
