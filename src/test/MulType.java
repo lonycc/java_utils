@@ -56,16 +56,16 @@ public class MulType {
 		System.out.println("====================================\n\n");
 		
 		// 定义类Gen2的一个Integer版本
-        Gen2 intOb2 = new Gen2(new Integer(88));  //需要显示声明类型
-        intOb2.showType();
-        System.out.println((Integer) intOb2.getOb());
-        // 定义类Gen2的一个String版本
-        Gen2 strOb2 = new Gen2("Hello Gen!");
-        strOb2.showType();
-        System.out.println((String) strOb2.getOb());
-        // 定义类Gen2的一个Object版本
-        Gen2 objOb = new Gen2(new Object());
-        objOb.showType();
-        System.out.println((Object) objOb.getOb());
+		Gen2 intOb2 = new Gen2(new Integer(88));  //需要显示声明类型
+		intOb2.showType();
+		System.out.println((Integer) intOb2.getOb());
+		// 定义类Gen2的一个String版本
+		Gen2 strOb2 = new Gen2("Hello Gen!");
+		strOb2.showType();
+		System.out.println((String) strOb2.getOb());
+		// 定义类Gen2的一个Object版本
+		Gen2 objOb = new Gen2(new Object());
+		objOb.showType();
+		System.out.println((Object) objOb.getOb());
 	}
 }
