@@ -177,6 +177,8 @@ public class nfplus {
         try {
             URL url = new URL(apiurl);
             URLConnection urlConnection = url.openConnection();
+            urlConnection.setConnectTimeout(60000);
+            urlConnection.setReadTimeout(60000);
             inputStream = urlConnection.getInputStream();
         } catch (IOException e) {
             e.printStackTrace();
